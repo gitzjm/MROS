@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="/static/bootstrap-3.3.7-dist/css/bootstrap.css">
+    <script src="/static/jquery-3.2.1.min.js "></script>
+    <script src="/static/jquery.cookie.js"></script>
+    <script src="/static/bootstrap-3.3.7-dist/js/bootstrap.js"></script>
+    <script src="/static/schedule/schedule.js"></script>
+    <link rel="stylesheet" href="/static/schedule/schedule.css">
+    <link rel="stylesheet" href="https://at.alicdn.com/t/font_234130_nem7eskcrkpdgqfr.css">
+    <style>
+        * {
+            font-family: "微软雅黑 Light", "Microsoft Yahei", "微软雅黑 Light", Tahoma, 'Simsun', Arial, Helvetica, sans-serif;
+
+        }
+
+        .hide {
+            display: none;
+        }
+
+        body {
+            background-color: #f6f6f6;
+            font-size: 18px;
+        }
+
+        h1 {
+            text-align: center;
+            margin: 50px;
+        }
+
+        .boxshaw {
+            position: absolute;
+            top: 43px;
+            background-color: white;
+            opacity: 0.8;
+            border-radius: 5px;
+        }
+
+        #date {
+            height: 40px;
+            font-size: 20px;
+            text-align: center
+        }
+
+        td {
+            height: 60px;
+            text-align: center;
+            line-height: 60px;
+        }
+
+        th {
+            text-align: center;
+        }
+
+        .chosen {
+            background-color: rgba(167, 255, 162, 0.31);
+        }
+
+        td:hover {
+            background: #e5e5e5;
+        }
+
+        .my_choice {
+            background-color: rgba(146, 173, 255, 0.27);
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>会议室预定系统</h1>
+
+
+    <div class="form-group col-lg-4 col-lg-offset-8">
+        <div class="col-lg-9">
+            <input type="text" class="form-control" id="date" placeholder="">
+            <div id='schedule-box' class="boxshaw pull-right"></div>
+        </div>
+        <button class="btn  btn-default col-lg-3 " id="sub_btn" style="height: 40px">预定</button>
+    </div>
+
+    <div>
+        <h3 id='h3Ele'></h3>
+    </div>
+    <table class="table table-bordered">
+        <thead>
+        <tr>
+            <th>会议室</th>
+            {% for time in time_list %}
+                <th>{{ time.1 }}</th>
+            {% endfor %}
+        </tr>
+        </thead>
+
+        <tbody>
+
+        </tbody>
+    </table>
+</div>
+<script>
+
+    $(function () {
+        $("#date").val($(".today").html());
+        $("#schedule-box").hide();
+        $("#date").focus(function () {
+            $("#schedule-box").slideDown()
+        });
+        $(document).click(function () {
+            $("#schedule-box").slideUp()
+        });
+        $("#schedule-box,#date").click(function (event) {
+            event.stopPropagation();
+        });
+    })
+
+
+</script>
+<script>
+
+    var mySchedule = new Schedule({
+        el: '#schedule-box',
+        //date: '2018-9-20',
+        clickCb: function (y, m, d) {
+            document.querySelector('#date').value = y + '-' + m + '-' + d;
+            init_booking(y + '-' + m + '-' + d)
+        },
+        nextMonthCb: function (y, m, d) {
+            document.querySelector('#date').value = y + '-' + m + '-' + d
+        },
+        nextYeayCb: function (y, m, d) {
+            document.querySelector('#date').value = y + '-' + m + '-' + d
+        },
+        prevMonthCb: function (y, m, d) {
+            document.querySelector('#date').value = y + '-' + m + '-' + d
+        },
+        prevYearCb: function (y, m, d) {
+            document.querySelector('#date').value = y + '-' + m + '-' + d
+        }
+    });
+
+    $(function () {
+        init_booking($("#date").val());
+    });
+    function init_booking(data) {
+        $.ajax({
+            url: "/init_booking/",
+            type: "get",
+            dataType: 'JSON',
+            data: {"date": data},
+            success: function (data) {
+                console.log(data);
+                $('tbody').html("");
+                $.each(data, function (i, item) {
+                    var tr = $('<tr></tr>');
+                    $.each(item, function (j, row) {
+                        var td = $('<td></td>');
+                        $(td).text(row.text);
+                        $.each(row.attrs, function (k, v) {
+                            $(td).attr(k, v);
+                        });
+                        if (row.chosen) {
+                            $(td).addClass('choice');
+                        }
+                        $(tr).append(td)
+                    });
+                    $('tbody').append(tr);
+                })
+            }
+        })
+    }
+
+    $("#date").bind("input propertychange", function () {
+        var date = get_date();
+        init_booking(date)
+    })
+</script>
+<script>
+    POST_DATA = {
+        ADD: {},
+        DEL: {}
+    };
+    $("tbody").on('click', 'td', function () {
+        var i = $(this);
+        var time_id = i.attr("time_id");
+        var room_id = i.attr("room_id");
+        if (i.hasClass("disable")) {
+            alert("别人订过了 你瞎么？");
+        }
+        else if (i.html() == '{{ request.session.user }}') {
+            i.removeClass();
+            i.html("");
+            if (POST_DATA.DEL[room_id]) {
+                POST_DATA.DEL[room_id].push(time_id)
+            }
+            else {
+                POST_DATA.DEL[room_id] = [time_id]
+            }
+        }
+        else {
+
+            i.addClass("my_choice");
+            i.html("{{ request.session.user }}");
+            $("tbody").find('td[time_id=' + time_id + ']').each(function () {
+                if ($(this).attr("room_id") != room_id && $(this).html() == '{{ request.session.user }}') {
+                    alert("同时间段不可预定多个会议室");
+                    i.removeClass("my_choice");
+                    i.html("");
+                }
+            });
+            if (i.hasClass("my_choice")) {
+                if (POST_DATA.ADD[room_id]) {
+                    POST_DATA.ADD[room_id].push(time_id)
+                }
+                else {
+                    POST_DATA.ADD[room_id] = [time_id]
+                }
+            }
+        }
+
+
+    })
+</script>
+
+
+<script>
+
+    $("#sub_btn").click(function () {
+        console.log(POST_DATA)
+        $.ajax({
+            url: "/init_booking/",
+            type: "POST",
+            headers: {"X-CSRFToken": $.cookie("csrftoken")},
+            data: {
+                'POST_DATA': JSON.stringify(POST_DATA),
+                "date": $('#date').val()
+            },
+            success: function (data) {
+                POST_DATA = {
+                    ADD: {},
+                    DEL: {}
+                };
+                alert(data)
+            }
+
+        })
+    })
+</script>
+
+</body>
+
+</html>
